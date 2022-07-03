@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from typing import Optional
 
+import torch
 from pytorch_lightning import LightningDataModule
 from torch.utils.data import DataLoader
 
@@ -11,6 +12,7 @@ from model.tokenizer import Tokenizer, TokenizerConfig
 
 @dataclass
 class DataModuleConfig(TokenizerConfig):
+    name: str = ''
     data_path: str = ''
     batch_size: int = 32
     num_workers: int = 0
@@ -25,13 +27,19 @@ class DataModule(LightningDataModule):
         self.val_data = None
 
     def collate_fn(self, batch):
-        s1, s2, _ = zip(*batch)
+        s1, s2, score = zip(*batch)
         s1, s2 = list(s1), list(s2)
         s1 = self.tokenizer(s1)
         s2 = self.tokenizer(s2)
-        s1, mlm_label1 = data_augment.get_mlm_label(s1)
-        s2, mlm_label2 = data_augment.get_mlm_label(s2)
-        return s1, s2, mlm_label1, mlm_label2
+        s1, mlm_label_1 = data_augment.get_mlm_label(s1)
+        s2, mlm_label_2 = data_augment.get_mlm_label(s2)
+        score = torch.FloatTensor(score)
+
+        return {'s1': s1,
+                's2': s2,
+                'mlm_label_1': mlm_label_1,
+                'mlm_label_2': mlm_label_2,
+                'score': score}
 
     def setup(self, stage: Optional[str] = None):
         self.train_data = STSDataset(path=self.config.data_path, split='train')

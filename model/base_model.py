@@ -1,6 +1,8 @@
-import torch.nn as nn
-from transformers import AutoModel, AutoConfig
+from dataclasses import dataclass
 
+from torch import nn
+from torch.nn import functional as F
+from transformers import AutoModel, AutoConfig
 
 class MLPLayer(nn.Module):
     """
@@ -29,7 +31,9 @@ class Similarity(nn.Module):
         self.cos = nn.CosineSimilarity(dim=-1)
 
     def forward(self, x, y):
-        return self.cos(x, y) / self.temp
+        x = F.normalize(x)
+        y = F.normalize(y)
+        return x @ y.T / self.temp
 
 
 class Pooler(nn.Module):
@@ -75,21 +79,38 @@ class Pooler(nn.Module):
 
 def get_model(model_name, from_pretrained):
     if from_pretrained:
-        model = AutoModel.from_config(model_name)
+        model = AutoModel.from_pretrained(model_name)
     else:
         config = AutoConfig.from_pretrained(model_name)
         model = AutoModel.from_config(config)
     return model
 
 
-class SentVector(nn.Module):
+class BaseModelPooler(nn.Module):
     def __init__(self, config, from_pretrained):
         super().__init__()
         self.config = config
-        self.backbone = get_model(config.model, from_pretrained)
+        self.backbone = get_model(config.model_name, from_pretrained)
         self.pooler = Pooler(config.pool_type)
 
     def forward(self, x):
         outputs = self.backbone(x)
         pooler_output = self.pooler(outputs)
+        return outputs, pooler_output
+
+
+@dataclass
+class BaseModelConfig:
+    model_name: str = 'bert-base-cased'
+
+
+class BaseModel(nn.Module):
+    def __init__(self, config, from_pretrained):
+        super().__init__()
+        self.config = config
+        self.backbone = get_model(config.model_name, from_pretrained)
+
+    def forward(self, input_ids, attention_mask, token_type_ids):
+        outputs = self.backbone(input_ids, attention_mask, token_type_ids)[0]
+        pooler_output = outputs[:, 0]
         return outputs, pooler_output
