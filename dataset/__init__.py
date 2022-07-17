@@ -1,1 +1,2 @@
-from .sts_dataset import STSDataset
+from .sts_dataset import STSUnsupervisedDataset
+from .sts_dataset import STSSupervisedDataset

@@ -9,6 +9,7 @@ def process(in_path, out_path):
     raw = [line.split('\t') for line in f if line]
     data = [[_[5], _[6], float(_[4])] for _ in raw]
     df = pd.DataFrame(data, columns=['s1', 's2', 'score'])
+    df['score'] = df['score'] / 5.0
     print(df)
     df.to_csv(out_path, encoding='utf-8-sig', index=False)
 

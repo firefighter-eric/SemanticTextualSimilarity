@@ -7,7 +7,7 @@ from dataset.datamodule import DataModule
 from task.simcse_task import SimCSETask
 from conf import ROOT
 
-ckpt_path = ''
+ckpt_path = 'C:\Projects\SemanticTextualSimilarity\outputs\sts_bert-base-cased-v1.ckpt'
 
 task = SimCSETask.load_from_checkpoint(ckpt_path)
 config = task.config
