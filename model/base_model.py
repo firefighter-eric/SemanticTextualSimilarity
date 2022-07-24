@@ -4,6 +4,7 @@ from torch import nn
 from torch.nn import functional as F
 from transformers import AutoModel, AutoConfig
 
+
 class MLPLayer(nn.Module):
     """
     Head for getting sentence representations over RoBERTa/BERT's CLS representation.
@@ -101,7 +102,7 @@ class BaseModelPooler(nn.Module):
 
 @dataclass
 class BaseModelConfig:
-    model_name: str = 'bert-base-cased'
+    model_name: str = 'bert-base-uncased'
 
 
 class BaseModel(nn.Module):
@@ -113,4 +114,15 @@ class BaseModel(nn.Module):
     def forward(self, input_ids, attention_mask, token_type_ids):
         outputs = self.backbone(input_ids, attention_mask, token_type_ids)[0]
         pooler_output = outputs[:, 0]
+        return outputs, pooler_output
+
+
+class ModelWithPooler(BaseModel):
+    def __init__(self, config, from_pretrained):
+        super().__init__(config, from_pretrained)
+        self.mlp = MLPLayer(self.backbone.config)
+
+    def forward(self, input_ids, attention_mask, token_type_ids):
+        outputs = self.backbone(input_ids, attention_mask, token_type_ids)[0]
+        pooler_output = self.mlp(outputs[:, 0])
         return outputs, pooler_output

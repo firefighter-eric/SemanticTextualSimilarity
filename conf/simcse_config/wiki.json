@@ -1,0 +1,11 @@
+{
+  "name": "wiki_unsupervised",
+  "train_data_path": "data/wiki/wiki1m.txt",
+  "val_data_path": "data/STS/processed",
+  "train_batch_size": 64,
+  "lr": 3e-5,
+  "mlm_flag": false,
+  "model_max_length": 32,
+  "monitor": "val/spearman_corr",
+  "mode": "max"
+}

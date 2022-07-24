@@ -1,15 +1,16 @@
 from dataclasses import dataclass
 
+import numpy as np
 import torch
 from pytorch_lightning import LightningModule
 from scipy.stats import spearmanr
 from torch.nn import CrossEntropyLoss, MSELoss, functional as F
 from transformers.models.bert.modeling_bert import BertLMPredictionHead
 
-from model.base_model import BaseModel, Similarity, BaseModelConfig
+from model.base_model import Similarity, BaseModelConfig, ModelWithPooler
 from model.cl_loss import CLLoss
 from model.tokenizer import TokenizerConfig
-from utils.optim import step_warmup_optimizers
+from utils.optim import get_linear_schedule_with_warmup
 
 
 @dataclass
@@ -29,7 +30,7 @@ class SimCSETask(LightningModule):
         super().__init__()
         self.config = config
         self.save_hyperparameters(ignore='from_pretrained')
-        self.model = BaseModel(self.config, from_pretrained)
+        self.model = ModelWithPooler(self.config, from_pretrained)
         if self.config.mlm_flag:
             self.mlm = BertLMPredictionHead(self.model.backbone.config)
         self.sim = Similarity(self.config.temp)
@@ -37,42 +38,42 @@ class SimCSETask(LightningModule):
         self.mlm_loss = CrossEntropyLoss()
         self.mse_loss = MSELoss()
 
-    def forward(self, s1, s2, mlm_label_1=None, mlm_label_2=None):
-        outputs_1, pooler_output_1 = self.model(**s1)
-        outputs_2, pooler_output_2 = self.model(**s2)
+    def forward(self, sent, mlm_label=None):
+        outputs, pooler_output = self.model(**sent)
+        pooler_output = pooler_output.view(pooler_output.size(0) // 2, 2, -1)
+        z1 = pooler_output[:, 0]
+        z2 = pooler_output[:, 1]
 
         # sim loss
-        sim = self.sim(pooler_output_1, pooler_output_2)
+        sim = self.sim(z1, z2)
         sim_loss = self.cl_loss(sim)
 
         # mlm loss
         if self.config.mlm_flag:
-            m1 = self.mlm(outputs_1)
-            m2 = self.mlm(outputs_2)
-            m1 = torch.permute(m1, [0, 2, 1])
-            m2 = torch.permute(m2, [0, 2, 1])
-            mlm_loss = self.mlm_loss(m1, mlm_label_1) + self.mlm_loss(m2, mlm_label_2)
+            mlm_outputs = self.mlm(outputs)
+            m1 = torch.permute(mlm_outputs, [0, 2, 1])
+            mlm_loss = self.mlm_loss(m1, mlm_label)
         else:
             mlm_loss = 0
 
         loss = sim_loss + self.config.mlm_weight * mlm_loss
         return sim, sim_loss, mlm_loss, loss
 
-    def pair_forward(self, s1, s2, mlm_label_1=None, mlm_label_2=None, label=None):
-        outputs_1, pooler_output_1 = self.model(**s1)
-        outputs_2, pooler_output_2 = self.model(**s2)
+    def pair_forward(self, sent, mlm_label, label=None):
+        outputs, pooler_output = self.model(**sent)
+        pooler_output = pooler_output.view(pooler_output.size(0) // 2, 2, -1)
+        z1 = pooler_output[:, 0]
+        z2 = pooler_output[:, 1]
 
         # sim loss
-        sim = F.cosine_similarity(pooler_output_1, pooler_output_2)
+        sim = F.cosine_similarity(z1, z2)
         sim_loss = self.mse_loss(sim, label)
 
         # mlm loss
         if self.config.mlm_flag:
-            m1 = self.mlm(outputs_1)
-            m2 = self.mlm(outputs_2)
-            m1 = torch.permute(m1, [0, 2, 1])
-            m2 = torch.permute(m2, [0, 2, 1])
-            mlm_loss = self.mlm_loss(m1, mlm_label_1) + self.mlm_loss(m2, mlm_label_2)
+            mlm_outputs = self.mlm(outputs)
+            mlm_outputs = torch.permute(mlm_outputs, [0, 2, 1])
+            mlm_loss = self.mlm_loss(mlm_outputs, mlm_label)
         else:
             mlm_loss = 0
 
@@ -80,8 +81,8 @@ class SimCSETask(LightningModule):
         return sim, sim_loss, mlm_loss, loss
 
     def training_step(self, batch, batch_idx):
-        s1, s2, mlm_label_1, mlm_label_2 = batch['s1'], batch['s2'], batch['mlm_label_1'], batch['mlm_label_2']
-        sim, sim_loss, mlm_loss, loss = self(s1, s2, mlm_label_1, mlm_label_2)
+        sent, mlm_label = batch['sent'], batch['mlm_label']
+        sim, sim_loss, mlm_loss, loss = self(sent, mlm_label)
         self.log('train/sim_loss', sim_loss)
         self.log('train/mlm_loss', mlm_loss)
         self.log('train/loss', loss)
@@ -91,10 +92,16 @@ class SimCSETask(LightningModule):
     def validation_step(self, batch, batch_idx):
         return self.super_validation_step(batch, batch_idx)
 
+    def validation_epoch_end(self, outputs) -> None:
+        sim, label = zip(*outputs)
+        sim = torch.concat(sim).tolist()
+        label = torch.concat(label).tolist()
+        spearman_corr = spearmanr(sim, label)[0]
+        self.log('val/spearman_corr', spearman_corr)
+
     def unsuper_validation_step(self, batch, batch_idx):
-        s1, s2, mlm_label_1, mlm_label_2, label = \
-            batch['s1'], batch['s2'], batch['mlm_label_1'], batch['mlm_label_2'], batch['label']
-        sim, sim_loss, mlm_loss, loss = self(s1, s2, mlm_label_1, mlm_label_2)
+        sent, mlm_label, label = batch['sent'], batch['mlm_label'], batch['label']
+        sim, sim_loss, mlm_loss, loss = self(sent, mlm_label)
         self.log('val/sim_loss', sim_loss)
         self.log('val/mlm_loss', mlm_loss)
         self.log('val/loss', loss)
@@ -103,24 +110,12 @@ class SimCSETask(LightningModule):
         self.log('val/spearman_corr', spearman_corr)
 
     def super_validation_step(self, batch, batch_idx):
-        s1, s2, mlm_label_1, mlm_label_2, label = \
-            batch['s1'], batch['s2'], batch['mlm_label_1'], batch['mlm_label_2'], batch['label']
-        sim, sim_loss, mlm_loss, loss = self.pair_forward(s1, s2, mlm_label_1, mlm_label_2, label)
+        sent, mlm_label, label = batch['sent'], batch['mlm_label'], batch['label']
+        sim, sim_loss, mlm_loss, loss = self.pair_forward(sent, mlm_label, label)
         self.log('val/sim_loss', sim_loss)
         self.log('val/mlm_loss', mlm_loss)
         self.log('val/loss', loss)
-
-        sim = sim.tolist()
-        label = label.tolist()
-        spearman_corr = spearmanr(sim, label).correlation
-        self.log('val/spearman_corr', spearman_corr)
-
-        # batch_size = sim.size(0)
-        # similarity_flatten = sim.view(-1).tolist()
-        # label_flatten = torch.eye(batch_size).view(-1).tolist()
-        # spearman_corr = spearmanr(similarity_flatten, label_flatten).correlation
-        # self.log('val/spearman_corr', spearman_corr)
-        return loss
+        return sim, label
 
     def configure_optimizers(self):
-        return step_warmup_optimizers(self, self.config)
+        return get_linear_schedule_with_warmup(self, self.config, self.trainer)

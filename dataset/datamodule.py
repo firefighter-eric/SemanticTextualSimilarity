@@ -7,7 +7,7 @@ from torch.utils.data import DataLoader
 
 from dataset import STSUnsupervisedDataset, STSSupervisedDataset
 from dataset import data_augment
-from dataset.sts_dataset import STSOneSentDataset
+from dataset.sts_dataset import OneSentDataset
 from model.tokenizer import Tokenizer, TokenizerConfig
 
 
@@ -32,25 +32,25 @@ class DataModule(LightningDataModule):
 
     def collate_fn(self, batch):
         s1, s2, score = zip(*batch)
-        s1, s2 = list(s1), list(s2)
-        s1 = self.tokenizer(s1)
-        s2 = self.tokenizer(s2)
+        sent = []
+        for i in range(len(s1)):
+            sent.append(s1[i])
+            sent.append(s2[i])
+
+        sent = self.tokenizer(sent)
         if self.config.mlm_flag:
-            s1, mlm_label_1 = data_augment.get_mlm_label(s1)
-            s2, mlm_label_2 = data_augment.get_mlm_label(s2)
+            sent, mlm_label = data_augment.get_mlm_label(s)
         else:
-            mlm_label_1, mlm_label_2 = None, None
+            mlm_label = None
         score = torch.FloatTensor(score)
 
-        return {'s1': s1,
-                's2': s2,
-                'mlm_label_1': mlm_label_1,
-                'mlm_label_2': mlm_label_2,
+        return {'sent': sent,
+                'mlm_label': mlm_label,
                 'label': score}
 
     def setup(self, stage: Optional[str] = None):
         # self.train_data = STSUnsupervisedDataset(path=self.config.train_data_path, split='train')
-        self.train_data = STSOneSentDataset(path=self.config.train_data_path)
+        self.train_data = OneSentDataset(path=self.config.train_data_path)
         self.val_data = STSSupervisedDataset(path=self.config.val_data_path, split='dev')
 
     def pin_dataloader(self, data):

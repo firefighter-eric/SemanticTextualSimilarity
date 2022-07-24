@@ -5,7 +5,7 @@ from transformers import AutoTokenizer
 
 @dataclass
 class TokenizerConfig:
-    tokenizer_name: str = 'bert-base-cased'
+    tokenizer_name: str = 'bert-base-uncased'
     model_max_length: int = 512
 
 

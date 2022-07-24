@@ -4,7 +4,7 @@ import pandas as pd
 from torch.utils.data import Dataset
 
 
-class STSOneSentDataset(Dataset):
+class OneSentDataset(Dataset):
     def __init__(self, path, split='train'):
         with open(path, 'r') as f:
             data = f.read().strip().split('\n')
