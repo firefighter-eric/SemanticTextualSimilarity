@@ -1,6 +1,5 @@
 from dataclasses import dataclass
 
-import numpy as np
 import torch
 from pytorch_lightning import LightningModule
 from scipy.stats import spearmanr

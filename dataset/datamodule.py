@@ -5,7 +5,7 @@ import torch
 from pytorch_lightning import LightningDataModule
 from torch.utils.data import DataLoader
 
-from dataset import STSUnsupervisedDataset, STSSupervisedDataset
+from dataset import STSSupervisedDataset
 from dataset import data_augment
 from dataset.sts_dataset import OneSentDataset
 from model.tokenizer import Tokenizer, TokenizerConfig
@@ -16,7 +16,7 @@ class DataModuleConfig(TokenizerConfig):
     name: str = ''
     train_data_path: str = ''
     val_data_path: str = ''
-    train_batch_size: int = 128
+    train_batch_size: int = 64
     val_batch_size: int = 16
     num_workers: int = 0
     mlm_flag: bool = False

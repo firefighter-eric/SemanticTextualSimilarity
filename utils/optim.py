@@ -43,15 +43,15 @@ def step_warmup_optimizers(model: nn.Module, config):
 def get_linear_schedule_with_warmup(model, config, trainer: Trainer):
     lr = config.lr
     weight_decay = config.weight_decay
-    warm_up_steps = config.warnup_steps
+    warmup_steps = config.warnup_steps
     num_training_steps = trainer.estimated_stepping_batches
     # print('{num_training_steps=}')
 
     def lr_lambda(current_step: int):
-        if current_step < warm_up_steps:
-            return float(current_step) / float(max(1, warm_up_steps))
+        if current_step < warmup_steps:
+            return float(current_step) / float(max(1, warmup_steps))
         return max(
-            0.0, float(num_training_steps - current_step) / float(max(1, num_training_steps - warm_up_steps))
+            0.0, float(num_training_steps - current_step) / float(max(1, num_training_steps - warmup_steps))
         )
 
     optimizer = AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)

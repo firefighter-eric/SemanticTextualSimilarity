@@ -7,11 +7,11 @@ from dataset.datamodule import DataModule
 from task.simcse_task import SimCSETask
 from conf import ROOT
 
-ckpt_path = '../outputs/wiki_unsupervised_bert-base-uncased-v3.ckpt'
+ckpt_path = '../outputs/wiki_unsupervised_bert-base-uncased-v4.ckpt'
 
 task = SimCSETask.load_from_checkpoint(ckpt_path)
 config = task.config
-# config.model_max_length = 512
+config.model_max_length = 512
 pprint(config.__dict__)
 dm = DataModule(config)
 
