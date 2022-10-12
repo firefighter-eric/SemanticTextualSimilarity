@@ -51,7 +51,7 @@ class DataModule(LightningDataModule):
     def setup(self, stage: Optional[str] = None):
         # self.train_data = STSUnsupervisedDataset(path=self.config.train_data_path, split='train')
         self.train_data = OneSentDataset(path=self.config.train_data_path)
-        self.val_data = STSSupervisedDataset(path=self.config.val_data_path, split='dev')
+        self.val_data = STSSupervisedDataset(path=self.config.val_data_path)
 
     def pin_dataloader(self, data):
         return DataLoader(dataset=data, batch_size=self.config.train_batch_size,

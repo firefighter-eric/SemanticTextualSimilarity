@@ -12,6 +12,7 @@ ckpt_path = '../outputs/wiki_unsupervised_bert-base-uncased-v4.ckpt'
 task = SimCSETask.load_from_checkpoint(ckpt_path)
 config = task.config
 config.model_max_length = 512
+
 pprint(config.__dict__)
 dm = DataModule(config)
 
@@ -20,4 +21,9 @@ trainer = Trainer(default_root_dir=join(ROOT, '.tmp'),
                   precision=16,
                   max_epochs=-1)
 
+config.val_data_path = join(ROOT, 'data/STS/processed/train.csv')
+trainer.validate(task, dm)
+config.val_data_path = join(ROOT, 'data/STS/processed/dev.csv')
+trainer.validate(task, dm)
+config.val_data_path = join(ROOT, 'data/STS/processed/test.csv')
 trainer.validate(task, dm)

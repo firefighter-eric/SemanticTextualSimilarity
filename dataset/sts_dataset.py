@@ -40,8 +40,8 @@ class STSUnsupervisedDataset(Dataset):
 
 
 class STSSupervisedDataset:
-    def __init__(self, path, split):
-        df = pd.read_csv(join(path, f'{split}.csv'))
+    def __init__(self, path):
+        df = pd.read_csv(path)
         self.data = df[['s1', 's2', 'score']].values.tolist()
 
     def __getitem__(self, index):
